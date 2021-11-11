@@ -6,12 +6,7 @@ import * as pathlib from 'path';
 
 import { AuroraSnapshotHandlerOptions, allToEnv } from './handler/shared';
 
-export {
-    AuroraSnapshotSourceSelector,
-    AuroraSnapshotSourceAggregation,
-    AuroraSnapshotTarget,
-    AuroraSnapshotDeletionPolicy,
-} from './handler/shared';
+export { AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy } from './handler/shared';
 
 export interface AuroraSnapshotCopierProps extends AuroraSnapshotHandlerOptions {
     handlerTimeout?: cdk.Duration;
