@@ -20,4 +20,7 @@ jobs:
     - run: npm ci
     - run: npm run lint-check
     - run: npm run compile
-    - run: npm run test
+
+    - uses: artiomtr/jest-coverage-report-action@v2.0-rc.5
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
