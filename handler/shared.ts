@@ -1,3 +1,5 @@
+import { isArrayOfStrings } from './utils';
+
 export interface AuroraSnapshotSourceSelector {
     dbClusterIdentifier?: string;
     tags?: Record<string, Array<string> | true>;
@@ -26,19 +28,6 @@ export interface AuroraSnapshotHandlerOptions {
     target: AuroraSnapshotTarget;
     instanceIdentifier?: string;
 }
-
-const isArrayOfStrings = (obj: unknown): obj is Array<string> => {
-    if (!Array.isArray(obj)) {
-        return false;
-    }
-
-    for (const item of obj) {
-        if (typeof item !== 'string') {
-            return false;
-        }
-    }
-    return true;
-};
 
 export const toEnv = (source: AuroraSnapshotSourceSelector, index: number): Record<string, string> => {
     const env: Record<string, string> = {};
@@ -202,8 +191,4 @@ export const allFromEnv = (env: Record<string, string | undefined>): AuroraSnaps
     }
 
     return options;
-};
-
-export const hasKey = <T, K extends PropertyKey>(obj: unknown, prop: K): obj is T & Record<K, unknown> => {
-    return typeof obj === 'object' && !!obj && Object.prototype.hasOwnProperty.call(obj, prop);
 };

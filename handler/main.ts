@@ -1,5 +1,7 @@
-import { allFromEnv, AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy, hasKey } from './shared';
 import * as AWS from 'aws-sdk';
+
+import { allFromEnv, AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy } from './shared';
+import { fromAwsTags, kmsKeyIdOrArnToId, hasKey } from './utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const logger = (message: string, obj?: any): void => {
@@ -18,24 +20,6 @@ interface Snapshot {
     createdAtTime: Date;
     kmsKeyId?: string;
 }
-
-const fromAwsTags = (awsTags?: AWS.RDS.Types.TagList): Record<string, string> => {
-    const tags: Record<string, string> = {};
-    for (const awsTag of awsTags || []) {
-        if (typeof awsTag.Key === 'string' && typeof awsTag.Value === 'string') {
-            tags[awsTag.Key] = awsTag.Value;
-        }
-    }
-    return tags;
-};
-
-const kmsKeyIdOrArnToId = (keyIdOrArn: string): string => {
-    if (keyIdOrArn.startsWith('arn:aws:kms:')) {
-        return keyIdOrArn.replace(/.*\//, '');
-    }
-
-    return keyIdOrArn;
-};
 
 export const snapshotFromApiMatchesSource = (source: AuroraSnapshotSourceSelector, snapshot: AWS.RDS.Types.DBClusterSnapshot): boolean => {
     // logger('Checking snapshot against source', { snapshot, source });

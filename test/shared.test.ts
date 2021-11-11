@@ -34,6 +34,36 @@ describe('toEnv/fromEnv', () => {
         ).toEqual(SAMPLE_SOURCE);
     });
 
+    test('fromEnv tag true', () => {
+        expect(
+            fromEnv(
+                {
+                    SOURCE_0_TAGS: '{"foo":true}',
+                },
+                0,
+            ),
+        ).toEqual({
+            tags: {
+                foo: true,
+            },
+        });
+    });
+
+    test('fromEnv bad json', () => {
+        // Should ignore the bad json
+        expect(
+            fromEnv(
+                {
+                    SOURCE_0_DB_CLUSTER_IDENTIFIER: 'mysourcedbclusteridentifier',
+                    SOURCE_0_TAGS: 'this is not valid json {',
+                },
+                0,
+            ),
+        ).toEqual({
+            dbClusterIdentifier: 'mysourcedbclusteridentifier',
+        });
+    });
+
     test('round trip', () => {
         expect(fromEnv(toEnv(SAMPLE_SOURCE, 0), 0)).toEqual(SAMPLE_SOURCE);
     });
