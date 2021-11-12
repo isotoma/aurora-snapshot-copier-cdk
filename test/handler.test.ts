@@ -259,3 +259,277 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         expect(filtered).toEqual(expect.arrayContaining([olderA, olderB]));
     });
 });
+
+describe('isUsableSnapshot', () => {
+    test('is', () => {
+        expect(
+            handlerMain.isUsableSnapshot({
+                DBClusterSnapshotIdentifier: 'foo',
+                DBClusterIdentifier: 'bar',
+                DBClusterSnapshotArn: 'baz',
+                SnapshotCreateTime: new Date(),
+            }),
+        ).toEqual(true);
+    });
+
+    test('is not, missing snapshot identifier', () => {
+        expect(
+            handlerMain.isUsableSnapshot({
+                DBClusterIdentifier: 'bar',
+                DBClusterSnapshotArn: 'baz',
+                SnapshotCreateTime: new Date(),
+            }),
+        ).toEqual(false);
+    });
+
+    test('is not, missing cluster identifier', () => {
+        expect(
+            handlerMain.isUsableSnapshot({
+                DBClusterSnapshotIdentifier: 'foo',
+                DBClusterSnapshotArn: 'baz',
+                SnapshotCreateTime: new Date(),
+            }),
+        ).toEqual(false);
+    });
+
+    test('is not, missing snapshot arn', () => {
+        expect(
+            handlerMain.isUsableSnapshot({
+                DBClusterSnapshotIdentifier: 'foo',
+                DBClusterIdentifier: 'bar',
+                SnapshotCreateTime: new Date(),
+            }),
+        ).toEqual(false);
+    });
+
+    test('is not, missing create time', () => {
+        expect(
+            handlerMain.isUsableSnapshot({
+                DBClusterSnapshotIdentifier: 'foo',
+                DBClusterIdentifier: 'bar',
+                DBClusterSnapshotArn: 'baz',
+            }),
+        ).toEqual(false);
+    });
+});
+
+describe('snapshotFromApiMatchesSource', () => {
+    test('cluster identifier mismatch', () => {
+        expect(
+            handlerMain.snapshotFromApiMatchesSource(
+                {
+                    dbClusterIdentifier: 'mycluster',
+                },
+                {
+                    DBClusterIdentifier: 'NOTmycluster',
+                },
+            ),
+        ).toEqual(false);
+    });
+
+    test('tag value does not match', () => {
+        expect(
+            handlerMain.snapshotFromApiMatchesSource(
+                {
+                    tags: {
+                        mytag: ['tagvalue'],
+                    },
+                },
+                {
+                    TagList: [
+                        {
+                            Key: 'mytag',
+                            Value: 'NOTtagvalue',
+                        },
+                    ],
+                },
+            ),
+        ).toEqual(false);
+    });
+
+    test('required tag missing', () => {
+        expect(
+            handlerMain.snapshotFromApiMatchesSource(
+                {
+                    tags: {
+                        mytag: true,
+                    },
+                },
+                {
+                    TagList: [
+                        {
+                            Key: 'NOTmytag',
+                            Value: 'NOTtagvalue',
+                        },
+                    ],
+                },
+            ),
+        ).toEqual(false);
+    });
+
+    test('too old', () => {
+        expect(
+            handlerMain.snapshotFromApiMatchesSource(
+                {
+                    snapshotCreateTimeNotBefore: new Date('2021-01-01'),
+                },
+                {
+                    SnapshotCreateTime: new Date('2020-01-01'),
+                },
+            ),
+        ).toEqual(false);
+    });
+
+    test('missing snapshot create time', () => {
+        expect(
+            handlerMain.snapshotFromApiMatchesSource(
+                {
+                    snapshotCreateTimeNotBefore: new Date('2021-01-01'),
+                },
+                {
+                    SnapshotCreateTime: undefined,
+                },
+            ),
+        ).toEqual(false);
+    });
+
+    test('type mismatch', () => {
+        expect(
+            handlerMain.snapshotFromApiMatchesSource(
+                {
+                    snapshotType: 'sometype',
+                },
+                {
+                    SnapshotType: 'NOTsometime',
+                },
+            ),
+        ).toEqual(false);
+    });
+});
+
+describe('copySnapshotToRegion', () => {
+    test('simple', async () => {
+        // GIVEN
+        AWSMock.setSDKInstance(AWS);
+
+        const copyDBClusterSnapshotSpy = sinon.spy((params, cb) => {
+            cb(null, {});
+        });
+
+        AWSMock.mock('RDS', 'copyDBClusterSnapshot', copyDBClusterSnapshotSpy);
+
+        // WHEN
+        await handlerMain.copySnapshotToRegion({
+            snapshot: {
+                identifier: 'myidentifier',
+                arn: 'myarn',
+                clusterIdentifier: 'mycluster',
+                createdAtTime: new Date('2021-01-01'),
+            },
+            sourceRegion: 'eu-west-1',
+            targetRegion: 'eu-west-2',
+        });
+
+        // THEN
+        const rdsConstructorSpy = AWS.RDS as unknown as sinon.SinonSpy;
+        expect(rdsConstructorSpy.getCall(0).args[0]).toEqual({
+            region: 'eu-west-2',
+        });
+
+        expect(copyDBClusterSnapshotSpy.callCount).toEqual(1);
+        const params = copyDBClusterSnapshotSpy.getCall(0).args[0];
+        expect(params).toEqual({
+            CopyTags: true,
+            SourceDBClusterSnapshotIdentifier: 'myarn',
+            SourceRegion: 'eu-west-1',
+
+            Tags: [
+                {
+                    Key: 'aurora-snapshot-copier-cdk/CopiedBy',
+                    Value: 'aurora-snapshot-copier-cdk',
+                },
+                {
+                    Key: 'aurora-snapshot-copier-cdk/CopiedFromRegion',
+                    Value: 'eu-west-1',
+                },
+            ],
+            TargetDBClusterSnapshotIdentifier: 'myidentifier',
+        });
+    });
+});
+
+describe('getDefaultRdsKmsKeyIdForRegion', () => {
+    afterEach(() => {
+        AWSMock.restore();
+    });
+
+    test('found', async () => {
+        // GIVEN
+        AWSMock.setSDKInstance(AWS);
+
+        const listAliasesSpy = sinon.spy((params, cb) => {
+            cb(null, {
+                Aliases: [
+                    {
+                        AliasName: 'not this one',
+                        TargetKeyId: 'someid',
+                    },
+                    {
+                        AliasName: 'alias/aws/rds',
+                        TargetKeyId: 'correctid',
+                    },
+                ],
+            });
+        });
+
+        AWSMock.mock('KMS', 'listAliases', listAliasesSpy);
+
+        // WHEN
+        const keyId = await handlerMain.getDefaultRdsKmsKeyIdForRegion('eu-west-1');
+
+        // THEN
+        expect(keyId).toEqual('correctid');
+
+        const kmsConstructorSpy = AWS.KMS as unknown as sinon.SinonSpy;
+        expect(kmsConstructorSpy.getCall(0).args[0]).toEqual({
+            region: 'eu-west-1',
+        });
+
+        expect(listAliasesSpy.callCount).toEqual(1);
+    });
+
+    test('not found', async () => {
+        // GIVEN
+        AWSMock.setSDKInstance(AWS);
+
+        const listAliasesSpy = sinon.spy((params, cb) => {
+            cb(null, {
+                Aliases: [
+                    {
+                        AliasName: 'not this one',
+                        TargetKeyId: 'someid',
+                    },
+                    {
+                        AliasName: 'not this one either',
+                        TargetKeyId: 'someotherid',
+                    },
+                ],
+            });
+        });
+
+        AWSMock.mock('KMS', 'listAliases', listAliasesSpy);
+
+        // WHEN
+        const keyId = await handlerMain.getDefaultRdsKmsKeyIdForRegion('eu-west-1');
+
+        // THEN
+        expect(keyId).toEqual(undefined);
+
+        const kmsConstructorSpy = AWS.KMS as unknown as sinon.SinonSpy;
+        expect(kmsConstructorSpy.getCall(0).args[0]).toEqual({
+            region: 'eu-west-1',
+        });
+
+        expect(listAliasesSpy.callCount).toEqual(1);
+    });
+});

@@ -3,6 +3,18 @@ import * as AWS from 'aws-sdk';
 import { allFromEnv, AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy } from './shared';
 import { fromAwsTags, kmsKeyIdOrArnToId, hasKey } from './utils';
 
+type RequiredSnapshotKeys = 'DBClusterSnapshotIdentifier' | 'DBClusterIdentifier' | 'DBClusterSnapshotArn' | 'SnapshotCreateTime';
+type UsableSnapshot = Required<Pick<AWS.RDS.Types.DBClusterSnapshot, RequiredSnapshotKeys>> & Omit<AWS.RDS.Types.DBClusterSnapshot, RequiredSnapshotKeys>;
+
+export const isUsableSnapshot = (snapshot: AWS.RDS.Types.DBClusterSnapshot): snapshot is UsableSnapshot => {
+    return (
+        typeof snapshot.DBClusterSnapshotIdentifier !== 'undefined' &&
+        typeof snapshot.DBClusterIdentifier !== 'undefined' &&
+        typeof snapshot.DBClusterSnapshotArn !== 'undefined' &&
+        typeof snapshot.SnapshotCreateTime !== 'undefined'
+    );
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const logger = (message: string, obj?: any): void => {
     console.log(
@@ -38,7 +50,7 @@ export const snapshotFromApiMatchesSource = (source: AuroraSnapshotSourceSelecto
             const snapshotTagValue = snapshotTags[filterTagKey];
             // If the filter tag value is "true", that means we just want the tag to exist with any value
             if (filterTagValues === true) {
-                if (typeof snapshotTagValue !== 'undefined') {
+                if (typeof snapshotTagValue === 'undefined') {
                     logger('Rejecting because required tag is missing', {
                         snapshotTagValue,
                         filterTagKey,
@@ -102,12 +114,7 @@ export const listSnapshotsMatchingSource = async (source: AuroraSnapshotSourceSe
 
     const snapshots: Array<Snapshot> = [];
     for (const snapshot of response.DBClusterSnapshots || []) {
-        if (
-            typeof snapshot.DBClusterSnapshotIdentifier !== 'string' ||
-            typeof snapshot.DBClusterIdentifier !== 'string' ||
-            typeof snapshot.DBClusterSnapshotArn !== 'string' ||
-            !snapshot.SnapshotCreateTime
-        ) {
+        if (!isUsableSnapshot(snapshot)) {
             continue;
         }
 
@@ -147,14 +154,18 @@ export const aggregateSnapshots = (snapshots: Array<Snapshot>, aggregation?: Aur
     return snapshots;
 };
 
-export const copySnapshotToRegion = async (
-    snapshot: Snapshot,
-    sourceRegion: string,
-    targetRegion: string,
-    sourceRegionDefaultRdsKmsKeyId: string | undefined,
-    defaultRdsKmsKeyId: string | undefined,
-    instanceIdentifier: string | undefined,
-): Promise<void> => {
+interface CopySnapshotToRegionProps {
+    snapshot: Snapshot;
+    sourceRegion: string;
+    targetRegion: string;
+    sourceRegionDefaultRdsKmsKeyId?: string;
+    defaultRdsKmsKeyId?: string;
+    instanceIdentifier?: string;
+}
+
+export const copySnapshotToRegion = async (props: CopySnapshotToRegionProps): Promise<void> => {
+    const { snapshot, sourceRegion, targetRegion, sourceRegionDefaultRdsKmsKeyId, defaultRdsKmsKeyId, instanceIdentifier } = props;
+
     if (sourceRegion === targetRegion) {
         logger('Failed to copy snapshot to region, cannot copy to the same region', {
             snapshot,
@@ -247,7 +258,7 @@ export const copySnapshotToRegion = async (
     });
 };
 
-const getDefaultRdsKmsKeyIdForRegion = async (region: string): Promise<string | undefined> => {
+export const getDefaultRdsKmsKeyIdForRegion = async (region: string): Promise<string | undefined> => {
     const kms = new AWS.KMS({
         region,
     });
@@ -279,7 +290,16 @@ export const copySnapshotsToRegion = async (snapshots: Array<Snapshot>, targetRe
 
     const promises = [];
     for (const snapshot of snapshots) {
-        promises.push(copySnapshotToRegion(snapshot, sourceRegion, targetRegion, sourceRegionDefaultRdsKmsKeyId, defaultRdsKmsKeyId, instanceIdentifier));
+        promises.push(
+            copySnapshotToRegion({
+                snapshot,
+                sourceRegion,
+                targetRegion,
+                sourceRegionDefaultRdsKmsKeyId,
+                defaultRdsKmsKeyId,
+                instanceIdentifier,
+            }),
+        );
     }
 
     await Promise.all(promises).then(() => {
@@ -406,12 +426,7 @@ export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDelet
     const response = await rds.describeDBClusterSnapshots({}).promise();
 
     for (const snapshot of response.DBClusterSnapshots || []) {
-        if (
-            typeof snapshot.DBClusterSnapshotIdentifier !== 'string' ||
-            typeof snapshot.DBClusterIdentifier !== 'string' ||
-            typeof snapshot.DBClusterSnapshotArn !== 'string' ||
-            !snapshot.SnapshotCreateTime
-        ) {
+        if (!isUsableSnapshot(snapshot)) {
             continue;
         }
 
