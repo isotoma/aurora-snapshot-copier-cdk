@@ -1,6 +1,10 @@
 # Typescript things
 *.d.ts
 build/
+*.js
+!jest.config.js
+!.prettierrc.js
+!.eslintrc.js
 
 # Docs
 docs/
