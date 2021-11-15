@@ -3,6 +3,7 @@ import * as AWSMock from 'aws-sdk-mock';
 import * as sinon from 'sinon';
 
 import * as handlerMain from '../handler/main';
+import * as shared from '../handler/shared';
 
 const HOUR_IN_MILLIS = 60 * 60 * 1000;
 const HOUR_IN_SECONDS = 60 * 60;
@@ -706,19 +707,57 @@ describe('deleteSnapshots', () => {
     });
 });
 
-// describe('handler', () => {
-//     test('simple', async () => {
-//         const mockAllFromEnv = sinon.spy(() => ({
-//             sources: [{
-//                 dbClusterIdentifier: 'myidentifier',
-//             }],
-//             target: {
-//                 regions: ['eu-west-1'],
-//             },
-//         }));
+describe('handler', () => {
+    test('simple', async () => {
+        const mockAllFromEnv = sinon.spy(() => ({
+            sources: [
+                {
+                    dbClusterIdentifier: 'myidentifier',
+                },
+            ],
+            target: {
+                regions: ['eu-west-1'],
+            },
+        }));
 
-//         jest.spyOn(handlerMain, 'allFromEnv').mockImplementation(mockAllFromEnv);
+        jest.spyOn(shared, 'allFromEnv').mockImplementation(mockAllFromEnv);
 
-//         // TODO: more from here
-//     });
-// });
+        const mySnapshot = {
+            identifier: 'mysnapshotidentifier',
+            arn: 'mysnapshotidentifier',
+            clusterIdentifier: 'myidentifier',
+            createdAtTime: new Date('2021-01-01'),
+        };
+
+        const mockListSnapshotsMatchingSource = sinon.spy(() => {
+            return Promise.resolve([mySnapshot]);
+        });
+        jest.spyOn(handlerMain, 'listSnapshotsMatchingSource').mockImplementation(mockListSnapshotsMatchingSource);
+
+        const mockAggregateSnapshots = sinon.spy((snapshots) => snapshots);
+        jest.spyOn(handlerMain, 'aggregateSnapshots').mockImplementation(mockAggregateSnapshots);
+
+        const mockCopySnapshots = sinon.spy(() => Promise.resolve());
+        jest.spyOn(handlerMain, 'copySnapshots').mockImplementation(mockCopySnapshots);
+
+        const mockDeleteSnapshots = sinon.spy(() => Promise.resolve());
+        jest.spyOn(handlerMain, 'deleteSnapshots').mockImplementation(mockDeleteSnapshots);
+
+        // WHEN
+        await handlerMain.handler();
+
+        expect(mockAllFromEnv.callCount).toEqual(1);
+        expect(mockListSnapshotsMatchingSource.callCount).toEqual(1);
+        expect(mockAggregateSnapshots.callCount).toEqual(1);
+        expect(mockCopySnapshots.callCount).toEqual(1);
+        expect(mockDeleteSnapshots.callCount).toEqual(1);
+
+        expect(mockCopySnapshots.getCall(0).args).toEqual([
+            [mySnapshot],
+            {
+                regions: ['eu-west-1'],
+            },
+            undefined,
+        ]);
+    });
+});
