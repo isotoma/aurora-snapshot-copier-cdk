@@ -214,6 +214,7 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         arn: 'olderA',
         clusterIdentifier: 'A',
         createdAtTime: new Date('2021-01-01'),
+        justRemoveTag: false,
     };
 
     const oldA = {
@@ -221,6 +222,7 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         arn: 'oldA',
         clusterIdentifier: 'A',
         createdAtTime: new Date('2021-02-01'),
+        justRemoveTag: false,
     };
 
     const newerA = {
@@ -228,6 +230,7 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         arn: 'newerA',
         clusterIdentifier: 'A',
         createdAtTime: new Date('2021-03-01'),
+        justRemoveTag: false,
     };
 
     const olderB = {
@@ -235,6 +238,7 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         arn: 'olderB',
         clusterIdentifier: 'B',
         createdAtTime: new Date('2021-01-01'),
+        justRemoveTag: false,
     };
 
     const oldB = {
@@ -242,6 +246,7 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         arn: 'oldB',
         clusterIdentifier: 'B',
         createdAtTime: new Date('2021-02-01'),
+        justRemoveTag: false,
     };
 
     const newerB = {
@@ -249,6 +254,7 @@ describe('filterSnapshotsForDeletionPolicy', () => {
         arn: 'newerB',
         clusterIdentifier: 'B',
         createdAtTime: new Date('2021-03-01'),
+        justRemoveTag: false,
     };
 
     test('deletion policy latest count per cluster', () => {
@@ -432,6 +438,7 @@ describe('copySnapshotToRegion', () => {
             },
             sourceRegion: 'eu-west-1',
             targetRegion: 'eu-west-2',
+            instanceIdentifier: 'instanceId',
         });
 
         // THEN
@@ -449,7 +456,7 @@ describe('copySnapshotToRegion', () => {
 
             Tags: [
                 {
-                    Key: 'aurora-snapshot-copier-cdk/CopiedBy',
+                    Key: 'aurora-snapshot-copier-cdk/CopiedBy/instanceId',
                     Value: 'aurora-snapshot-copier-cdk',
                 },
                 {
@@ -591,7 +598,7 @@ describe('copySnapshotsToRegion', () => {
                 },
             ],
             'eu-west-1',
-            undefined,
+            'instanceId',
         );
 
         expect(copyDBClusterSnapshotSpy.callCount).toEqual(2);
@@ -621,7 +628,7 @@ describe('handleSnapshotDeletion', () => {
                         SnapshotCreateTime: new Date(new Date().getTime() - 24 * HOUR_IN_MILLIS),
                         TagList: [
                             {
-                                Key: 'aurora-snapshot-copier-cdk/CopiedBy',
+                                Key: 'aurora-snapshot-copier-cdk/CopiedBy/instanceId',
                                 Value: 'aurora-snapshot-copier-cdk',
                             },
                         ],
@@ -638,7 +645,7 @@ describe('handleSnapshotDeletion', () => {
                 apply: true,
             },
             'eu-west-2',
-            undefined,
+            'instanceId',
         );
 
         expect(deleteDBClusterSnapshotSpy.callCount).toEqual(1);
@@ -669,7 +676,7 @@ describe('copySnapshots', () => {
             {
                 regions: ['eu-west-1', 'eu-west-2'],
             },
-            undefined,
+            'instanceId',
         );
 
         expect(mockCopySnapshotsToRegion.callCount).toEqual(2);
@@ -700,7 +707,7 @@ describe('deleteSnapshots', () => {
             {
                 regions: ['eu-west-1', 'eu-west-2'],
             },
-            undefined,
+            'instanceId',
         );
 
         expect(mockHandleSnapshotDeletion.callCount).toEqual(2);
@@ -718,6 +725,7 @@ describe('handler', () => {
             target: {
                 regions: ['eu-west-1'],
             },
+            instanceIdentifier: 'instanceId',
         }));
 
         jest.spyOn(shared, 'allFromEnv').mockImplementation(mockAllFromEnv);
@@ -757,7 +765,7 @@ describe('handler', () => {
             {
                 regions: ['eu-west-1'],
             },
-            undefined,
+            'instanceId',
         ]);
     });
 });
