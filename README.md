@@ -46,7 +46,5 @@ new AuroraSnapshotCopier(this, 'AuroraSnapshotCopier', {
 ## TODO:
 
 - Run on schedule
-- More tests
-    - Especially around the scary bits
 - More docs
 - Handle actually deleting and permissions
