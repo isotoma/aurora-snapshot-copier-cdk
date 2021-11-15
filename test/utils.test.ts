@@ -1,4 +1,4 @@
-import { fromAwsTags, kmsKeyIdOrArnToId, isArrayOfStrings, hasKey } from '../handler/utils';
+import { fromAwsTags, kmsKeyIdOrArnToId, isArrayOfStrings, hasKey, objOf } from '../handler/utils';
 
 describe('fromAwsTags', () => {
     test('empty', () => {
@@ -106,5 +106,13 @@ describe('hasKey', () => {
 
     test('is null', () => {
         expect(hasKey(null, 'foo')).toEqual(false);
+    });
+});
+
+describe('objOf', () => {
+    test('simple', () => {
+        expect(objOf('foo', 'bar')).toEqual({
+            foo: 'bar',
+        });
     });
 });

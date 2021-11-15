@@ -94,6 +94,7 @@ describe('allToEnv/allFromEnv', () => {
                         apply: true,
                     },
                 },
+                instanceIdentifier: 'instanceId',
             }),
         ).toEqual({
             SOURCE_0_DB_CLUSTER_IDENTIFIER: 'mysourcedbclusteridentifier_1',
@@ -109,6 +110,7 @@ describe('allToEnv/allFromEnv', () => {
             TARGET_DELETION_POLICY_APPLY: '1',
             TARGET_DELETION_POLICY_KEEP_CREATED_IN_THE_LAST_SECONDS: '2678400',
             TARGET_DELETION_POLICY_KEEP_LATEST_COUNT_PER_DB_CLUSTER_IDENTIFIER: '5',
+            INSTANCE_IDENTIFIER: 'instanceId',
         });
     });
 
@@ -128,6 +130,7 @@ describe('allToEnv/allFromEnv', () => {
                 TARGET_DELETION_POLICY_APPLY: '1',
                 TARGET_DELETION_POLICY_KEEP_CREATED_IN_THE_LAST_SECONDS: '2678400',
                 TARGET_DELETION_POLICY_KEEP_LATEST_COUNT_PER_DB_CLUSTER_IDENTIFIER: '5',
+                INSTANCE_IDENTIFIER: 'instanceId',
             }),
         ).toEqual({
             sources: [
@@ -151,6 +154,7 @@ describe('allToEnv/allFromEnv', () => {
                     apply: true,
                 },
             },
+            instanceIdentifier: 'instanceId',
         });
     });
 
@@ -177,6 +181,7 @@ describe('allToEnv/allFromEnv', () => {
                     apply: true,
                 },
             },
+            instanceIdentifier: 'instanceId',
         };
 
         expect(allFromEnv(allToEnv(options))).toEqual(options);

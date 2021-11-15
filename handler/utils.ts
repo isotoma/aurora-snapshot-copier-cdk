@@ -1,3 +1,6 @@
+export type PickRequired<T, Keys extends keyof T> = Required<Pick<T, Keys>> & Omit<T, Keys>;
+export type PickPartial<T, Keys extends keyof T> = Partial<Pick<T, Keys>> & Omit<T, Keys>;
+
 export const fromAwsTags = (awsTags: AWS.RDS.Types.TagList | undefined): Record<string, string> => {
     const tags: Record<string, string> = {};
     for (const awsTag of awsTags || []) {
@@ -31,4 +34,10 @@ export const isArrayOfStrings = (obj: unknown): obj is Array<string> => {
 
 export const hasKey = <T, K extends PropertyKey>(obj: unknown, prop: K): obj is T & Record<K, unknown> => {
     return typeof obj === 'object' && !!obj && Object.prototype.hasOwnProperty.call(obj, prop);
+};
+
+export const objOf = (key: string, value: string): Record<string, string> => {
+    const obj: Record<string, string> = {};
+    obj[key] = value;
+    return obj;
 };

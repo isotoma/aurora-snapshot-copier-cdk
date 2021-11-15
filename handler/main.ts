@@ -1,10 +1,10 @@
 import * as AWS from 'aws-sdk';
 
 import { allFromEnv, AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy } from './shared';
-import { fromAwsTags, kmsKeyIdOrArnToId, hasKey } from './utils';
+import { fromAwsTags, kmsKeyIdOrArnToId, hasKey, PickRequired } from './utils';
 
 type RequiredSnapshotKeys = 'DBClusterSnapshotIdentifier' | 'DBClusterIdentifier' | 'DBClusterSnapshotArn' | 'SnapshotCreateTime';
-type UsableSnapshot = Required<Pick<AWS.RDS.Types.DBClusterSnapshot, RequiredSnapshotKeys>> & Omit<AWS.RDS.Types.DBClusterSnapshot, RequiredSnapshotKeys>;
+type UsableSnapshot = PickRequired<AWS.RDS.Types.DBClusterSnapshot, RequiredSnapshotKeys>;
 
 export const isUsableSnapshot = (snapshot: AWS.RDS.Types.DBClusterSnapshot): snapshot is UsableSnapshot => {
     return (
@@ -31,6 +31,10 @@ interface Snapshot {
     clusterIdentifier: string;
     createdAtTime: Date;
     kmsKeyId?: string;
+}
+
+interface SnapshotForDeletion extends Snapshot {
+    justRemoveTag: boolean;
 }
 
 export const snapshotFromApiMatchesSource = (source: AuroraSnapshotSourceSelector, snapshot: AWS.RDS.Types.DBClusterSnapshot): boolean => {
@@ -134,10 +138,10 @@ export const listSnapshotsMatchingSource = async (source: AuroraSnapshotSourceSe
 
 export const aggregateSnapshots = (snapshots: Array<Snapshot>, aggregation?: AuroraSnapshotSourceAggregation): Array<Snapshot> => {
     if (aggregation && aggregation.latestCountPerCluster) {
-        const latestSnapshotsPerCluster: Record<string, SnapshotLatestQueue> = {};
+        const latestSnapshotsPerCluster: Record<string, SnapshotLatestQueue<Snapshot>> = {};
 
         for (const snapshot of snapshots) {
-            const existingForCluster = latestSnapshotsPerCluster[snapshot.clusterIdentifier] ?? new SnapshotLatestQueue(aggregation.latestCountPerCluster);
+            const existingForCluster = latestSnapshotsPerCluster[snapshot.clusterIdentifier] ?? new SnapshotLatestQueue<Snapshot>(aggregation.latestCountPerCluster);
             existingForCluster.push(snapshot);
             latestSnapshotsPerCluster[snapshot.clusterIdentifier] = existingForCluster;
         }
@@ -160,7 +164,7 @@ interface CopySnapshotToRegionProps {
     targetRegion: string;
     sourceRegionDefaultRdsKmsKeyId?: string;
     defaultRdsKmsKeyId?: string;
-    instanceIdentifier?: string;
+    instanceIdentifier: string;
 }
 
 export const copySnapshotToRegion = async (props: CopySnapshotToRegionProps): Promise<void> => {
@@ -207,21 +211,13 @@ export const copySnapshotToRegion = async (props: CopySnapshotToRegionProps): Pr
                 CopyTags: true,
                 Tags: [
                     {
-                        Key: 'aurora-snapshot-copier-cdk/CopiedBy',
+                        Key: `aurora-snapshot-copier-cdk/CopiedBy/${instanceIdentifier}`,
                         Value: 'aurora-snapshot-copier-cdk',
                     },
                     {
                         Key: 'aurora-snapshot-copier-cdk/CopiedFromRegion',
                         Value: sourceRegion,
                     },
-                    ...(instanceIdentifier
-                        ? [
-                              {
-                                  Key: 'aurora-snapshot-copier-cdk/InstanceIdentifier',
-                                  Value: instanceIdentifier,
-                              },
-                          ]
-                        : []),
                     ...(snapshot.kmsKeyId
                         ? [
                               {
@@ -243,7 +239,46 @@ export const copySnapshotToRegion = async (props: CopySnapshotToRegionProps): Pr
         if (hasKey(err, 'code') && err.code === 'DBClusterSnapshotAlreadyExistsFault') {
             logger('Snapshot already exists in the target region', {
                 targetSnapshotIdentifier,
+                snapshot,
             });
+
+            const existingTargetSnapshotResponse = await rds
+                .describeDBClusterSnapshots({
+                    DBClusterSnapshotIdentifier: targetSnapshotIdentifier,
+                })
+                .promise();
+
+            const snapshotInTargetRegion = (existingTargetSnapshotResponse.DBClusterSnapshots ?? [])[0];
+
+            if (typeof snapshotInTargetRegion === 'undefined') {
+                logger('Unable to find snapshot in target region, no matches', {
+                    targetSnapshotIdentifier,
+                    snapshot,
+                });
+                return;
+            }
+
+            const snapshotArnInTargetRegion = snapshotInTargetRegion.DBClusterSnapshotArn;
+
+            if (typeof snapshotArnInTargetRegion === 'undefined') {
+                logger('Unable to find snapshot in target region, found snapshot but has no ARN', {
+                    targetSnapshotIdentifier,
+                    snapshot,
+                });
+                return;
+            }
+
+            await rds
+                .addTagsToResource({
+                    ResourceName: snapshotArnInTargetRegion,
+                    Tags: [
+                        {
+                            Key: `aurora-snapshot-copier-cdk/CopiedBy/${instanceIdentifier}`,
+                            Value: 'aurora-snapshot-copier-cdk',
+                        },
+                    ],
+                })
+                .promise();
             return;
         } else {
             throw err;
@@ -275,7 +310,7 @@ export const getDefaultRdsKmsKeyIdForRegion = async (region: string): Promise<st
     return undefined;
 };
 
-export const copySnapshotsToRegion = async (snapshots: Array<Snapshot>, targetRegion: string, instanceIdentifier: string | undefined): Promise<void> => {
+export const copySnapshotsToRegion = async (snapshots: Array<Snapshot>, targetRegion: string, instanceIdentifier: string): Promise<void> => {
     const sourceRegion = process.env.AWS_REGION;
 
     if (!sourceRegion) {
@@ -307,8 +342,8 @@ export const copySnapshotsToRegion = async (snapshots: Array<Snapshot>, targetRe
     });
 };
 
-export class SnapshotLatestQueue {
-    readonly snapshots: Array<Snapshot>;
+export class SnapshotLatestQueue<T extends Snapshot> {
+    readonly snapshots: Array<T>;
     readonly maxSize: number;
 
     constructor(maxSize: number) {
@@ -324,7 +359,7 @@ export class SnapshotLatestQueue {
     // which may have been pushed out of the queue to make space, or
     // the snapshot that was passed in if there is no space for it in
     // the queue and it is older than all those already there.
-    push(snapshot: Snapshot): Snapshot | undefined {
+    push(snapshot: T): T | undefined {
         let insertAtIndex: number | undefined = undefined;
         for (let i = 0; i < this.maxSize; ++i) {
             const compareSnapshot = this.snapshots[i];
@@ -356,14 +391,14 @@ export class SnapshotLatestQueue {
     }
 }
 
-export const filterSnapshotsForDeletionPolicy = (deletionPolicy: AuroraSnapshotDeletionPolicy, snapshots: Array<Snapshot>): Array<Snapshot> => {
-    const snapshotsNotForSavingPerCluster: Array<Snapshot> = [];
+export const filterSnapshotsForDeletionPolicy = (deletionPolicy: AuroraSnapshotDeletionPolicy, snapshots: Array<SnapshotForDeletion>): Array<SnapshotForDeletion> => {
+    const snapshotsNotForSavingPerCluster: Array<SnapshotForDeletion> = [];
 
-    const snapshotsToSavePerCluster: Record<string, SnapshotLatestQueue> = {};
+    const snapshotsToSavePerCluster: Record<string, SnapshotLatestQueue<SnapshotForDeletion>> = {};
 
     for (const snapshot of snapshots) {
         if (deletionPolicy.keepLatestCountPerDbClusterIdentifier) {
-            const existingSaved = snapshotsToSavePerCluster[snapshot.clusterIdentifier] ?? new SnapshotLatestQueue(deletionPolicy.keepLatestCountPerDbClusterIdentifier);
+            const existingSaved = snapshotsToSavePerCluster[snapshot.clusterIdentifier] ?? new SnapshotLatestQueue<SnapshotForDeletion>(deletionPolicy.keepLatestCountPerDbClusterIdentifier);
             snapshotsToSavePerCluster[snapshot.clusterIdentifier] = existingSaved;
 
             const popped = existingSaved.push(snapshot);
@@ -392,7 +427,7 @@ export const filterSnapshotsForDeletionPolicy = (deletionPolicy: AuroraSnapshotD
 
     const now = new Date();
 
-    const snapshotsToDelete: Array<Snapshot> = [];
+    const snapshotsToDelete: Array<SnapshotForDeletion> = [];
 
     if (typeof deletionPolicy.keepCreatedInTheLastSeconds !== 'undefined') {
         for (const snapshot of snapshotsNotForSavingPerCluster) {
@@ -406,7 +441,7 @@ export const filterSnapshotsForDeletionPolicy = (deletionPolicy: AuroraSnapshotD
     return snapshotsNotForSavingPerCluster;
 };
 
-export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDeletionPolicy | undefined, region: string, instanceIdentifier: string | undefined): Promise<void> => {
+export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDeletionPolicy | undefined, region: string, instanceIdentifier: string): Promise<void> => {
     if (typeof deletionPolicy === 'undefined') {
         logger('No deletion policy, nothing to do');
         return;
@@ -421,7 +456,7 @@ export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDelet
         region,
     });
 
-    const snapshots: Array<Snapshot> = [];
+    const snapshots: Array<SnapshotForDeletion> = [];
 
     const response = await rds.describeDBClusterSnapshots({}).promise();
 
@@ -432,11 +467,18 @@ export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDelet
 
         const tags = fromAwsTags(snapshot.TagList);
 
-        if (tags['aurora-snapshot-copier-cdk/CopiedBy'] !== 'aurora-snapshot-copier-cdk') {
-            continue;
+        let copiedByOtherInstance = false;
+        let copiedByThisInstance = false;
+
+        for (const [key, value] of Object.entries(tags)) {
+            if (key === `aurora-snapshot-copier-cdk/CopiedBy/${instanceIdentifier}` && value === 'aurora-snapshot-copier-cdk') {
+                copiedByThisInstance = true;
+            } else if (key.startsWith('aurora-snapshot-copier-cdk/CopiedBy/')) {
+                copiedByOtherInstance = true;
+            }
         }
 
-        if (instanceIdentifier && tags['aurora-snapshot-copier-cdk/InstanceIdentifier'] !== instanceIdentifier) {
+        if (!copiedByThisInstance) {
             continue;
         }
 
@@ -445,6 +487,7 @@ export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDelet
             arn: snapshot.DBClusterSnapshotArn,
             clusterIdentifier: snapshot.DBClusterIdentifier,
             createdAtTime: snapshot.SnapshotCreateTime,
+            justRemoveTag: copiedByOtherInstance,
         });
     }
 
@@ -454,10 +497,19 @@ export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDelet
 
     const snapshotsToDelete = filterSnapshotsForDeletionPolicy(deletionPolicy, snapshots);
 
-    const deleteSnapshot = async (snapshot: Snapshot): Promise<void> => {
+    const deleteSnapshot = async (snapshot: SnapshotForDeletion): Promise<void> => {
         const deleteParams = {
             DBClusterSnapshotIdentifier: snapshot.identifier,
         };
+        if (snapshot.justRemoveTag) {
+            await rds
+                .removeTagsFromResource({
+                    ResourceName: snapshot.arn,
+                    TagKeys: [`aurora-snapshot-copier-cdk/CopiedBy/${instanceIdentifier}`],
+                })
+                .promise();
+            return;
+        }
         if (deletionPolicy.apply) {
             logger('Deleting snapshot', {
                 region,
@@ -492,7 +544,7 @@ export const handleSnapshotDeletion = async (deletionPolicy: AuroraSnapshotDelet
     await Promise.all(snapshotsToDelete.map(deleteSnapshot));
 };
 
-export const copySnapshots = async (snapshots: Array<Snapshot>, target: AuroraSnapshotTarget, instanceIdentifier: string | undefined): Promise<void> => {
+export const copySnapshots = async (snapshots: Array<Snapshot>, target: AuroraSnapshotTarget, instanceIdentifier: string): Promise<void> => {
     const promises = [];
     for (const region of target.regions) {
         promises.push(copySnapshotsToRegion(snapshots, region, instanceIdentifier));
@@ -502,7 +554,7 @@ export const copySnapshots = async (snapshots: Array<Snapshot>, target: AuroraSn
     });
 };
 
-export const deleteSnapshots = async (snapshots: Array<Snapshot>, target: AuroraSnapshotTarget, instanceIdentifier: string | undefined): Promise<void> => {
+export const deleteSnapshots = async (snapshots: Array<Snapshot>, target: AuroraSnapshotTarget, instanceIdentifier: string): Promise<void> => {
     const promises = [];
     for (const region of target.regions) {
         promises.push(handleSnapshotDeletion(target.deletionPolicy, region, instanceIdentifier));

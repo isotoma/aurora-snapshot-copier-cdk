@@ -9,8 +9,11 @@ import * as pathlib from 'path';
 import { AuroraSnapshotHandlerOptions, allToEnv } from './handler/shared';
 
 export { AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy } from './handler/shared';
+import { PickPartial, objOf } from './handler/utils';
 
-export interface AuroraSnapshotCopierProps extends AuroraSnapshotHandlerOptions {
+export type Partialed = PickPartial<AuroraSnapshotHandlerOptions, 'instanceIdentifier'>;
+
+export interface AuroraSnapshotCopierProps extends Partialed {
     handlerTimeout?: cdk.Duration;
     schedule?: events.Schedule;
 }
@@ -19,12 +22,17 @@ export class AuroraSnapshotCopier extends cdk.Construct {
     constructor(scope: cdk.Construct, identifier: string, props: AuroraSnapshotCopierProps) {
         super(scope, identifier);
 
+        const instanceIdentifier = props.instanceIdentifier ?? 'default';
+
         const handler = new lambda.Function(this, 'Handler', {
             code: lambda.Code.fromAsset(pathlib.join(__dirname, 'handler')),
             runtime: lambda.Runtime.NODEJS_14_X,
             handler: 'main.handler',
             timeout: props.handlerTimeout ?? cdk.Duration.minutes(1),
-            environment: allToEnv(props),
+            environment: allToEnv({
+                ...props,
+                instanceIdentifier,
+            }),
         });
 
         handler.addToRolePolicy(
@@ -54,12 +62,7 @@ export class AuroraSnapshotCopier extends cdk.Construct {
                         actions: ['rds:DeleteDBClusterSnapshot'],
                         resources: ['*'],
                         conditions: {
-                            'aws:ResourceTag/aurora-snapshot-copier-cdk/CopiedBy': 'aurora-snapshot-copier-cdk',
-                            ...(typeof props.instanceIdentifier !== 'undefined'
-                                ? {
-                                      'aws:ResourceTag/aurora-snapshot-copier-cdk/InstanceIdentifier': props.instanceIdentifier,
-                                  }
-                                : {}),
+                            StringEquals: objOf(`aws:ResourceTag/aurora-snapshot-copier-cdk/CopiedBy/${instanceIdentifier}`, 'aurora-snapshot-copier-cdk'),
                         },
                     }),
                 );

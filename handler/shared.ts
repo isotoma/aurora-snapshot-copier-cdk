@@ -26,7 +26,7 @@ export interface AuroraSnapshotHandlerOptions {
     sources: Array<AuroraSnapshotSourceSelector>;
     aggregation?: AuroraSnapshotSourceAggregation;
     target: AuroraSnapshotTarget;
-    instanceIdentifier?: string;
+    instanceIdentifier: string;
 }
 
 export const toEnv = (source: AuroraSnapshotSourceSelector, index: number): Record<string, string> => {
@@ -113,6 +113,8 @@ export const allToEnv = (options: AuroraSnapshotHandlerOptions): Record<string, 
 
     const env = Object.assign({}, ...envParts);
 
+    env['INSTANCE_IDENTIFIER'] = options.instanceIdentifier;
+
     if (options.aggregation) {
         if (typeof options.aggregation.latestCountPerCluster !== 'undefined') {
             env['AGGREGATION_LATEST_COUNT_PER_CLUSTER'] = `${options.aggregation.latestCountPerCluster}`;
@@ -150,6 +152,8 @@ export const allFromEnv = (env: Record<string, string | undefined>): AuroraSnaps
         index++;
     }
 
+    const instanceIdentifier = env['INSTANCE_IDENTIFIER'] ?? '';
+
     const target: AuroraSnapshotTarget = {
         regions: env['TARGET_REGIONS'] ? env['TARGET_REGIONS'].split(',') : [],
     };
@@ -181,6 +185,7 @@ export const allFromEnv = (env: Record<string, string | undefined>): AuroraSnaps
     const options: AuroraSnapshotHandlerOptions = {
         sources,
         target,
+        instanceIdentifier,
     };
 
     const rawLatestCountPerCluster = env['AGGREGATION_LATEST_COUNT_PER_CLUSTER'];

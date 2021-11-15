@@ -26,6 +26,7 @@ describe('construct', () => {
                     Variables: {
                         SOURCE_0_DB_CLUSTER_IDENTIFIER: 'myidentifier',
                         TARGET_REGIONS: 'eu-west-1,eu-central-1',
+                        INSTANCE_IDENTIFIER: 'default',
                     },
                 },
             }),
