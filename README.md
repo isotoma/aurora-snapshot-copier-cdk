@@ -45,6 +45,4 @@ new AuroraSnapshotCopier(this, 'AuroraSnapshotCopier', {
 
 ## TODO:
 
-- Run on schedule
 - More docs
-- Handle actually deleting and permissions

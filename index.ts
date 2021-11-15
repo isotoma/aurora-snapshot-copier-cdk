@@ -1,6 +1,8 @@
 import * as cdk from '@aws-cdk/core';
 import * as iam from '@aws-cdk/aws-iam';
 import * as lambda from '@aws-cdk/aws-lambda';
+import * as events from '@aws-cdk/aws-events';
+import * as eventsTargets from '@aws-cdk/aws-events-targets';
 
 import * as pathlib from 'path';
 
@@ -10,6 +12,7 @@ export { AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSn
 
 export interface AuroraSnapshotCopierProps extends AuroraSnapshotHandlerOptions {
     handlerTimeout?: cdk.Duration;
+    schedule?: events.Schedule;
 }
 
 export class AuroraSnapshotCopier extends cdk.Construct {
@@ -26,7 +29,7 @@ export class AuroraSnapshotCopier extends cdk.Construct {
 
         handler.addToRolePolicy(
             new iam.PolicyStatement({
-                actions: ['rds:DescribeDBClusterSnapshots', 'rds:CopyDBClusterSnapshot', 'rds:AddTagsToResource'],
+                actions: ['rds:DescribeDBClusterSnapshots', 'rds:CopyDBClusterSnapshot'],
                 resources: ['*'],
             }),
         );
@@ -36,5 +39,39 @@ export class AuroraSnapshotCopier extends cdk.Construct {
                 resources: ['*'],
             }),
         );
+
+        if (typeof props.target.deletionPolicy !== 'undefined') {
+            handler.addToRolePolicy(
+                new iam.PolicyStatement({
+                    actions: ['rds:AddTagsToResource'],
+                    resources: ['*'],
+                }),
+            );
+
+            if (props.target.deletionPolicy.apply) {
+                handler.addToRolePolicy(
+                    new iam.PolicyStatement({
+                        actions: ['rds:DeleteDBClusterSnapshot'],
+                        resources: ['*'],
+                        conditions: {
+                            'aws:ResourceTag/aurora-snapshot-copier-cdk/CopiedBy': 'aurora-snapshot-copier-cdk',
+                            ...(typeof props.instanceIdentifier !== 'undefined'
+                                ? {
+                                      'aws:ResourceTag/aurora-snapshot-copier-cdk/InstanceIdentifier': props.instanceIdentifier,
+                                  }
+                                : {}),
+                        },
+                    }),
+                );
+            }
+        }
+
+        if (typeof props.schedule !== 'undefined') {
+            new events.Rule(this, 'ScheduleRule', {
+                description: 'Event rule to run aurora-snapshot-copier-cdk on a schedule',
+                schedule: props.schedule,
+                targets: [new eventsTargets.LambdaFunction(handler)],
+            });
+        }
     }
 }
