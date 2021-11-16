@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file. Dates are displayed in UTC.
 
+#### [0.4.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/0.3.0...0.4.0)
+
+- Better duration CDK params [`#8`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/8)
+- Check that docs generate cleanly in CI [`e299217`](https://github.com/isotoma/aurora-snapshot-copier-cdk/commit/e2992171555c70cea5ac323d041ae008c95df27d)
+
 #### [0.3.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/0.2.0...0.3.0)
+
+> 15 November 2021
 
 - Remove dummy test [`#7`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/7)
 - Neater instance identifier handling [`#6`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/6)
