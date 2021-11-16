@@ -209,6 +209,10 @@ describe('aggregateSnapshots', () => {
 });
 
 describe('filterSnapshotsForDeletionPolicy', () => {
+    beforeEach(() => {
+        jest.resetModules();
+    });
+
     const olderA = {
         identifier: 'olderA',
         arn: 'olderA',
@@ -264,6 +268,25 @@ describe('filterSnapshotsForDeletionPolicy', () => {
             },
             [olderA, newerB, oldA, newerA, olderB, oldB],
         );
+        // 6 in total, 2 per cluster = 4, to be saved, leaving 2 oldest to be deleted
+        expect(filtered.length).toEqual(2);
+        expect(filtered).toEqual(expect.arrayContaining([olderA, olderB]));
+    });
+
+    test('deletion policy created in the last seconds', () => {
+        jest.useFakeTimers().setSystemTime(new Date('2021-03-02').getTime());
+
+        const filtered = handlerMain.filterSnapshotsForDeletionPolicy(
+            {
+                // Slightly more than 1 month
+                keepCreatedInTheLastSeconds: 35 * 24 * 60 * 60,
+            },
+            [olderA, oldA, newerA, olderB, oldB, newerB],
+        );
+
+        // Check that date mocking is working, otherwise will get confusing errors.
+        expect(new Date().toISOString().substring(0, 10)).toEqual('2021-03-02');
+
         // 6 in total, 2 per cluster = 4, to be saved, leaving 2 oldest to be deleted
         expect(filtered.length).toEqual(2);
         expect(filtered).toEqual(expect.arrayContaining([olderA, olderB]));
@@ -715,6 +738,10 @@ describe('deleteSnapshots', () => {
 });
 
 describe('handler', () => {
+    beforeEach(() => {
+        jest.resetModules();
+    });
+
     test('simple', async () => {
         const mockAllFromEnv = sinon.spy(() => ({
             sources: [

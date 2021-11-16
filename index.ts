@@ -6,33 +6,65 @@ import * as eventsTargets from '@aws-cdk/aws-events-targets';
 
 import * as pathlib from 'path';
 
-import { AuroraSnapshotHandlerOptions, allToEnv } from './handler/shared';
+import { AuroraSnapshotHandlerOptions, AuroraSnapshotDeletionPolicy, AuroraSnapshotTarget, allToEnv } from './handler/shared';
 
-export { AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation, AuroraSnapshotTarget, AuroraSnapshotDeletionPolicy } from './handler/shared';
+export { AuroraSnapshotSourceSelector, AuroraSnapshotSourceAggregation } from './handler/shared';
 import { PickPartial, objOf } from './handler/utils';
 
-export type Partialed = PickPartial<AuroraSnapshotHandlerOptions, 'instanceIdentifier'>;
-
-export interface AuroraSnapshotCopierProps extends Partialed {
-    handlerTimeout?: cdk.Duration;
-    schedule?: events.Schedule;
+export interface CdkAuroraSnapshotDeletionPolicy extends Omit<AuroraSnapshotDeletionPolicy, 'keepCreatedInTheLastSeconds'> {
+    keepCreatedInTheLast?: cdk.Duration;
 }
 
+export interface CdkAuroraSnapshotTarget extends Omit<AuroraSnapshotTarget, 'deletionPolicy'> {
+    deletionPolicy?: CdkAuroraSnapshotDeletionPolicy;
+}
+
+export interface CdkAuroraSnapshotHandlerOptions extends Omit<PickPartial<AuroraSnapshotHandlerOptions, 'instanceIdentifier'>, 'target'> {
+    handlerTimeout?: cdk.Duration;
+    schedule?: events.Schedule;
+    target: CdkAuroraSnapshotTarget;
+}
+
+const simplifyDeletionPolicy = (cdkDeletionPolicy: CdkAuroraSnapshotDeletionPolicy): AuroraSnapshotDeletionPolicy => {
+    return {
+        ...cdkDeletionPolicy,
+        ...(typeof cdkDeletionPolicy.keepCreatedInTheLast !== 'undefined'
+            ? {
+                  keepCreatedInTheLastSeconds: cdkDeletionPolicy.keepCreatedInTheLast.toSeconds(),
+              }
+            : {}),
+    };
+};
+
+const simplifyProps = (cdkProps: CdkAuroraSnapshotHandlerOptions): AuroraSnapshotHandlerOptions => {
+    const instanceIdentifier = cdkProps.instanceIdentifier ?? 'default';
+
+    return {
+        ...cdkProps,
+        target: {
+            ...cdkProps.target,
+            ...(typeof cdkProps.target.deletionPolicy !== 'undefined'
+                ? {
+                      deletionPolicy: simplifyDeletionPolicy(cdkProps.target.deletionPolicy),
+                  }
+                : {}),
+        },
+        instanceIdentifier,
+    };
+};
+
 export class AuroraSnapshotCopier extends cdk.Construct {
-    constructor(scope: cdk.Construct, identifier: string, props: AuroraSnapshotCopierProps) {
+    constructor(scope: cdk.Construct, identifier: string, props: CdkAuroraSnapshotHandlerOptions) {
         super(scope, identifier);
 
-        const instanceIdentifier = props.instanceIdentifier ?? 'default';
+        const simplifiedProps: AuroraSnapshotHandlerOptions = simplifyProps(props);
 
         const handler = new lambda.Function(this, 'Handler', {
             code: lambda.Code.fromAsset(pathlib.join(__dirname, 'handler')),
             runtime: lambda.Runtime.NODEJS_14_X,
             handler: 'main.handler',
             timeout: props.handlerTimeout ?? cdk.Duration.minutes(1),
-            environment: allToEnv({
-                ...props,
-                instanceIdentifier,
-            }),
+            environment: allToEnv(simplifiedProps),
         });
 
         handler.addToRolePolicy(
@@ -48,7 +80,7 @@ export class AuroraSnapshotCopier extends cdk.Construct {
             }),
         );
 
-        if (typeof props.target.deletionPolicy !== 'undefined') {
+        if (typeof simplifiedProps.target.deletionPolicy !== 'undefined') {
             handler.addToRolePolicy(
                 new iam.PolicyStatement({
                     actions: ['rds:AddTagsToResource'],
@@ -56,13 +88,13 @@ export class AuroraSnapshotCopier extends cdk.Construct {
                 }),
             );
 
-            if (props.target.deletionPolicy.apply) {
+            if (simplifiedProps.target.deletionPolicy.apply) {
                 handler.addToRolePolicy(
                     new iam.PolicyStatement({
                         actions: ['rds:DeleteDBClusterSnapshot'],
                         resources: ['*'],
                         conditions: {
-                            StringEquals: objOf(`aws:ResourceTag/aurora-snapshot-copier-cdk/CopiedBy/${instanceIdentifier}`, 'aurora-snapshot-copier-cdk'),
+                            StringEquals: objOf(`aws:ResourceTag/aurora-snapshot-copier-cdk/CopiedBy/${simplifiedProps.instanceIdentifier}`, 'aurora-snapshot-copier-cdk'),
                         },
                     }),
                 );
