@@ -19,9 +19,10 @@
         "snapshots"
     ],
     "scripts": {
-        "test": "jest",
+        "test": "npm run cleantsc && jest",
         "tsc": "tsc",
         "clean": "rm -rf build/",
+        "cleantsc": "rm -f index.js *.d.ts handler/*.js handler/*.d.ts",
         "compile": "npm run clean && npm run -- tsc --outDir build/ && cp package.json README.md ./build/",
         "version": "auto-changelog --hide-credit -p && git add CHANGELOG.md",
         "_lint": "eslint 'index.ts' 'handler/**/*.ts' 'test/**/*.ts' jest.config.js",

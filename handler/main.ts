@@ -431,7 +431,7 @@ export const filterSnapshotsForDeletionPolicy = (deletionPolicy: AuroraSnapshotD
 
     if (typeof deletionPolicy.keepCreatedInTheLastSeconds !== 'undefined') {
         for (const snapshot of snapshotsNotForSavingPerCluster) {
-            if (snapshot.createdAtTime.getTime() < now.getTime()) {
+            if (snapshot.createdAtTime.getTime() < now.getTime() - deletionPolicy.keepCreatedInTheLastSeconds * 1000) {
                 snapshotsToDelete.push(snapshot);
             }
         }
