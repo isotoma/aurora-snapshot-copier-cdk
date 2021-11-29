@@ -1,6 +1,8 @@
 # aurora-snapshot-copier-cdk
 For copying Aurora snapshots between regions on a schedule
 
+Documentation: https://isotoma.github.io/aurora-snapshot-copier-cdk/
+
 ## Getting started
 
 ```typescript
