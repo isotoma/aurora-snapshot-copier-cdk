@@ -1,9 +1,7 @@
 # aurora-snapshot-copier-cdk
 For copying Aurora snapshots between regions on a schedule
 
-![npm](https://img.shields.io/npm/v/aurora-snapshot-copier-cdk) ![NPM](https://img.shields.io/npm/l/aurora-snapshot-copier-cdk)
-
-Documentation: https://isotoma.github.io/aurora-snapshot-copier-cdk/
+[![docs](https://img.shields.io/badge/docs-!-brightgreen)](https://isotoma.github.io/aurora-snapshot-copier-cdk/) [![npm](https://img.shields.io/npm/v/aurora-snapshot-copier-cdk)](https://www.npmjs.com/package/aurora-snapshot-copier-cdk) [![NPM](https://img.shields.io/npm/l/aurora-snapshot-copier-cdk)](./LICENSE)
 
 ## Getting started
 
