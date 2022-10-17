@@ -22,6 +22,10 @@ jobs:
     - run: npm run compile
     - run: npm run -- docs --treatWarningsAsErrors
 
-    - uses: artiomtr/jest-coverage-report-action@v2.0-rc.5
+    - id: coverage
+      uses: artiomtr/jest-coverage-report-action@v2
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        output: report-markdown
+    - uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        message: ${{ steps.coverage.outputs.report }}
