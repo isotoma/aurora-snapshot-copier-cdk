@@ -22,6 +22,6 @@ jobs:
     - run: npm run compile
     - run: npm run -- docs --treatWarningsAsErrors
 
-    - uses: artiomtr/jest-coverage-report-action@v2.0-rc.5
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+    # - uses: artiomtr/jest-coverage-report-action@v2.0-rc.5
+    #   with:
+    #     github-token: ${{ secrets.GITHUB_TOKEN }}
