@@ -1,12 +1,6 @@
 name: "Run linting and tests"
 
-on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+on: push
 
 jobs:
   build:
@@ -27,12 +21,3 @@ jobs:
     - run: npm run lint-check
     - run: npm run compile
     - run: npm run -- docs --treatWarningsAsErrors
-
-    - id: coverage
-      uses: artiomtr/jest-coverage-report-action@v2
-      with:
-        test-script: npm run test
-        output: report-markdown
-    - uses: marocchino/sticky-pull-request-comment@v2
-      with:
-        message: ${{ steps.coverage.outputs.report }}
