@@ -2,7 +2,21 @@
 
 All notable changes to this project will be documented in this file. Dates are displayed in UTC.
 
+#### [0.5.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/0.4.0...0.5.0)
+
+- Specify peer dependencies [`#17`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/17)
+- CDK v2 support [`#16`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/16)
+- Bump node-fetch from 2.6.6 to 2.6.7 [`#11`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/11)
+- Bump minimist from 1.2.5 to 1.2.7 [`#12`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/12)
+- Bump marked from 3.0.8 to 4.1.1 [`#14`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/14)
+- Fix CI [`#13`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/13)
+- Fix badges [`#9`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/9)
+- Some useful badges [`95d0784`](https://github.com/isotoma/aurora-snapshot-copier-cdk/commit/95d078421f25bdf2d0da6da1b1a4a0ab276bfe26)
+- Add link to the documentation into the README [`2152bd8`](https://github.com/isotoma/aurora-snapshot-copier-cdk/commit/2152bd8020f1f6846d69c0eeba29868afcbc22ed)
+
 #### [0.4.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/0.3.0...0.4.0)
+
+> 16 November 2021
 
 - Better duration CDK params [`#8`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/8)
 - Check that docs generate cleanly in CI [`e299217`](https://github.com/isotoma/aurora-snapshot-copier-cdk/commit/e2992171555c70cea5ac323d041ae008c95df27d)
