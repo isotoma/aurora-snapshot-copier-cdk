@@ -30,6 +30,46 @@
         "lint-check": "npm run -- _lint --fix --max-warnings 0",
         "docs": "typedoc index.ts --includeVersion"
     },
+    "peerDependencies": {
+        "@aws-cdk/assert": "^1.132.0",
+        "@aws-cdk/aws-events": "^1.132.0",
+        "@aws-cdk/aws-events-targets": "^1.132.0",
+        "@aws-cdk/aws-iam": "^1.132.0",
+        "@aws-cdk/aws-lambda": "^1.132.0",
+        "@aws-cdk/aws-lambda-nodejs": "^1.132.0",
+        "@aws-cdk/core": "^1.132.0",
+        "aws-cdk-lib": "^2.0.0",
+        "constructs": "^10.0.0"
+    },
+    "peerDependenciesMeta": {
+        "@aws-cdk/assert": {
+            "optional": true
+        },
+        "@aws-cdk/aws-events": {
+            "optional": true
+        },
+        "@aws-cdk/aws-events-targets": {
+            "optional": true
+        },
+        "@aws-cdk/aws-iam": {
+            "optional": true
+        },
+        "@aws-cdk/aws-lambda": {
+            "optional": true
+        },
+        "@aws-cdk/aws-lambda-nodejs": {
+            "optional": true
+        },
+        "@aws-cdk/core": {
+            "optional": true
+        },
+        "aws-cdk-lib": {
+            "optional": true
+        },
+        "constructs": {
+            "optional": true
+        }
+    },
     "devDependencies": {
         "@aws-cdk/assert": "^1.132.0",
         "@aws-cdk/aws-events": "^1.132.0",
