@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file. Dates are displayed in UTC.
 
-#### [1.0.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/0.5.0...1.0.0)
+#### [2.0.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/1.0.0...2.0.0)
+
+- Remove CDK v1 support [`#20`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/20)
+
+### [1.0.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/0.5.0...1.0.0)
+
+> 1 June 2023
 
 - Change index exports to cdkv2 [`#19`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/19)
 
