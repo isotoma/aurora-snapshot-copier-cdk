@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file. Dates are displayed in UTC.
 
-#### [2.0.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/1.0.0...2.0.0)
+#### [2.1.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/2.0.0...2.1.0)
+
+- Use Node 16 for the Lambda runtime [`#21`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/21)
+
+### [2.0.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/1.0.0...2.0.0)
+
+> 31 August 2023
 
 - Remove CDK v1 support [`#20`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/20)
 
