@@ -1,7 +1,9 @@
+import * as RDS from '@aws-sdk/client-rds';
+
 export type PickRequired<T, Keys extends keyof T> = Required<Pick<T, Keys>> & Omit<T, Keys>;
 export type PickPartial<T, Keys extends keyof T> = Partial<Pick<T, Keys>> & Omit<T, Keys>;
 
-export const fromAwsTags = (awsTags: AWS.RDS.Types.TagList | undefined): Record<string, string> => {
+export const fromAwsTags = (awsTags: RDS.Tag[] | undefined): Record<string, string> => {
     const tags: Record<string, string> = {};
     for (const awsTag of awsTags || []) {
         if (typeof awsTag.Key === 'string' && typeof awsTag.Value === 'string') {
