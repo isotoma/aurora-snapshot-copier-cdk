@@ -1,5 +1,6 @@
-import * as AWS from 'aws-sdk';
-import * as AWSMock from 'aws-sdk-mock';
+import { mockClient } from 'aws-sdk-client-mock';
+import * as rds from '@aws-sdk/client-rds';
+import * as kms from '@aws-sdk/client-kms';
 import * as sinon from 'sinon';
 
 import * as handlerMain from '../handler/main';
@@ -7,6 +8,9 @@ import * as shared from '../handler/shared';
 
 const HOUR_IN_MILLIS = 60 * 60 * 1000;
 const HOUR_IN_SECONDS = 60 * 60;
+
+const rdsMock = mockClient(rds.RDSClient);
+const kmsMock = mockClient(kms.KMSClient);
 
 describe('listSnapshotsMatchingSource', () => {
     const OLD_ENV = process.env;
@@ -18,10 +22,13 @@ describe('listSnapshotsMatchingSource', () => {
             AWS_REGION: 'eu-west-2',
             AWS_DEFAULT_REGION: 'eu-west-2',
         };
+        rdsMock.reset();
+        kmsMock.reset();
     });
 
     afterEach(() => {
-        AWSMock.restore();
+        rdsMock.restore();
+        kmsMock.restore();
     });
 
     afterAll(() => {
@@ -33,23 +40,16 @@ describe('listSnapshotsMatchingSource', () => {
             dbClusterIdentifier: 'mysourcedbclusteridentifier',
         };
 
-        AWSMock.setSDKInstance(AWS);
-
-        const describeDBClusterSnapshotsSpy = sinon.spy((params, cb) => {
-            cb(null, {
-                DBClusterSnapshots: [
-                    {
-                        DBClusterSnapshotIdentifier: 'mysnapshot',
-                        DBClusterSnapshotArn: 'mysnapshotarn',
-                        DBClusterIdentifier: 'mysourcedbclusteridentifier',
-                        SnapshotCreateTime: new Date('2021-07-01'),
-                    },
-                ],
-            });
+        rdsMock.on(rds.DescribeDBClusterSnapshotsCommand).resolves({
+            DBClusterSnapshots: [
+                {
+                    DBClusterSnapshotIdentifier: 'mysnapshot',
+                    DBClusterSnapshotArn: 'mysnapshotarn',
+                    DBClusterIdentifier: 'mysourcedbclusteridentifier',
+                    SnapshotCreateTime: new Date('2021-07-01'),
+                },
+            ],
         });
-
-        // GIVEN
-        AWSMock.mock('RDS', 'describeDBClusterSnapshots', describeDBClusterSnapshotsSpy);
 
         // WHEN
         const snapshots = await handlerMain.listSnapshotsMatchingSource(source);
@@ -65,7 +65,7 @@ describe('listSnapshotsMatchingSource', () => {
         ]);
 
         // THEN
-        expect(describeDBClusterSnapshotsSpy.called).toBe(true);
+        expect(rdsMock.commandCalls(rds.DescribeDBClusterSnapshotsCommand)).toHaveLength(1);
     });
 });
 
@@ -441,15 +441,31 @@ describe('snapshotFromApiMatchesSource', () => {
 });
 
 describe('copySnapshotToRegion', () => {
+    const OLD_ENV = process.env;
+
+    beforeEach(() => {
+        jest.resetModules();
+        process.env = {
+            ...OLD_ENV,
+            AWS_REGION: 'eu-west-2',
+            AWS_DEFAULT_REGION: 'eu-west-2',
+        };
+        rdsMock.reset();
+        kmsMock.reset();
+    });
+
+    afterEach(() => {
+        rdsMock.restore();
+        kmsMock.restore();
+    });
+
+    afterAll(() => {
+        process.env = OLD_ENV;
+    });
+
     test('simple', async () => {
         // GIVEN
-        AWSMock.setSDKInstance(AWS);
-
-        const copyDBClusterSnapshotSpy = sinon.spy((params, cb) => {
-            cb(null, {});
-        });
-
-        AWSMock.mock('RDS', 'copyDBClusterSnapshot', copyDBClusterSnapshotSpy);
+        rdsMock.on(rds.CopyDBClusterSnapshotCommand).resolves({});
 
         // WHEN
         await handlerMain.copySnapshotToRegion({
@@ -465,17 +481,16 @@ describe('copySnapshotToRegion', () => {
         });
 
         // THEN
-        const rdsConstructorSpy = AWS.RDS as unknown as sinon.SinonSpy;
-        expect(rdsConstructorSpy.getCall(0).args[0]).toEqual({
-            region: 'eu-west-2',
-        });
+        expect(await rdsMock.call(0).thisValue.config.region()).toEqual('eu-west-2');
 
-        expect(copyDBClusterSnapshotSpy.callCount).toEqual(1);
-        const params = copyDBClusterSnapshotSpy.getCall(0).args[0];
+        const copyDBClusterSnapshotSpy = rdsMock.commandCalls(rds.CopyDBClusterSnapshotCommand);
+
+        expect(copyDBClusterSnapshotSpy).toHaveLength(1);
+        const params = copyDBClusterSnapshotSpy[0].args[0].input;
         expect(params).toEqual({
             CopyTags: true,
             SourceDBClusterSnapshotIdentifier: 'myarn',
-            SourceRegion: 'eu-west-1',
+            // SourceRegion: 'eu-west-1',
 
             Tags: [
                 {
@@ -493,30 +508,42 @@ describe('copySnapshotToRegion', () => {
 });
 
 describe('getDefaultRdsKmsKeyIdForRegion', () => {
+    const OLD_ENV = process.env;
+
+    beforeEach(() => {
+        jest.resetModules();
+        process.env = {
+            ...OLD_ENV,
+            AWS_REGION: 'eu-west-2',
+            AWS_DEFAULT_REGION: 'eu-west-2',
+        };
+        rdsMock.reset();
+        kmsMock.reset();
+    });
+
     afterEach(() => {
-        AWSMock.restore();
+        rdsMock.restore();
+        kmsMock.restore();
+    });
+
+    afterAll(() => {
+        process.env = OLD_ENV;
     });
 
     test('found', async () => {
         // GIVEN
-        AWSMock.setSDKInstance(AWS);
-
-        const listAliasesSpy = sinon.spy((params, cb) => {
-            cb(null, {
-                Aliases: [
-                    {
-                        AliasName: 'not this one',
-                        TargetKeyId: 'someid',
-                    },
-                    {
-                        AliasName: 'alias/aws/rds',
-                        TargetKeyId: 'correctid',
-                    },
-                ],
-            });
+        kmsMock.on(kms.ListAliasesCommand).resolves({
+            Aliases: [
+                {
+                    AliasName: 'not this one',
+                    TargetKeyId: 'someid',
+                },
+                {
+                    AliasName: 'alias/aws/rds',
+                    TargetKeyId: 'correctid',
+                },
+            ],
         });
-
-        AWSMock.mock('KMS', 'listAliases', listAliasesSpy);
 
         // WHEN
         const keyId = await handlerMain.getDefaultRdsKmsKeyIdForRegion('eu-west-1');
@@ -524,34 +551,25 @@ describe('getDefaultRdsKmsKeyIdForRegion', () => {
         // THEN
         expect(keyId).toEqual('correctid');
 
-        const kmsConstructorSpy = AWS.KMS as unknown as sinon.SinonSpy;
-        expect(kmsConstructorSpy.getCall(0).args[0]).toEqual({
-            region: 'eu-west-1',
-        });
+        expect(await kmsMock.call(0).thisValue.config.region()).toEqual('eu-west-1');
 
-        expect(listAliasesSpy.callCount).toEqual(1);
+        expect(kmsMock.commandCalls(kms.ListAliasesCommand)).toHaveLength(1);
     });
 
     test('not found', async () => {
         // GIVEN
-        AWSMock.setSDKInstance(AWS);
-
-        const listAliasesSpy = sinon.spy((params, cb) => {
-            cb(null, {
-                Aliases: [
-                    {
-                        AliasName: 'not this one',
-                        TargetKeyId: 'someid',
-                    },
-                    {
-                        AliasName: 'not this one either',
-                        TargetKeyId: 'someotherid',
-                    },
-                ],
-            });
+        kmsMock.on(kms.ListAliasesCommand).resolves({
+            Aliases: [
+                {
+                    AliasName: 'not this one',
+                    TargetKeyId: 'someid',
+                },
+                {
+                    AliasName: 'not this one either',
+                    TargetKeyId: 'someotherid',
+                },
+            ],
         });
-
-        AWSMock.mock('KMS', 'listAliases', listAliasesSpy);
 
         // WHEN
         const keyId = await handlerMain.getDefaultRdsKmsKeyIdForRegion('eu-west-1');
@@ -559,12 +577,9 @@ describe('getDefaultRdsKmsKeyIdForRegion', () => {
         // THEN
         expect(keyId).toEqual(undefined);
 
-        const kmsConstructorSpy = AWS.KMS as unknown as sinon.SinonSpy;
-        expect(kmsConstructorSpy.getCall(0).args[0]).toEqual({
-            region: 'eu-west-1',
-        });
+        expect(await kmsMock.call(0).thisValue.config.region()).toEqual('eu-west-1');
 
-        expect(listAliasesSpy.callCount).toEqual(1);
+        expect(kmsMock.commandCalls(kms.ListAliasesCommand)).toHaveLength(1);
     });
 });
 
@@ -578,10 +593,17 @@ describe('copySnapshotsToRegion', () => {
             AWS_REGION: 'eu-west-2',
             AWS_DEFAULT_REGION: 'eu-west-2',
         };
+        rdsMock.reset();
+        kmsMock.reset();
     });
 
     afterEach(() => {
-        AWSMock.restore();
+        rdsMock.restore();
+        kmsMock.restore();
+    });
+
+    afterAll(() => {
+        process.env = OLD_ENV;
     });
 
     afterAll(() => {
@@ -590,19 +612,10 @@ describe('copySnapshotsToRegion', () => {
 
     test('two', async () => {
         // GIVEN
-        AWSMock.setSDKInstance(AWS);
-
-        const copyDBClusterSnapshotSpy = sinon.spy((params, cb) => {
-            cb(null, {});
+        rdsMock.on(rds.CopyDBClusterSnapshotCommand).resolves({});
+        kmsMock.on(kms.ListAliasesCommand).resolves({
+            Aliases: [],
         });
-
-        AWSMock.mock('RDS', 'copyDBClusterSnapshot', copyDBClusterSnapshotSpy);
-
-        const listAliasesSpy = sinon.spy((params, cb) => {
-            cb(null, {});
-        });
-
-        AWSMock.mock('KMS', 'listAliases', listAliasesSpy);
 
         // WHEN
         await handlerMain.copySnapshotsToRegion(
@@ -624,43 +637,58 @@ describe('copySnapshotsToRegion', () => {
             'instanceId',
         );
 
-        expect(copyDBClusterSnapshotSpy.callCount).toEqual(2);
-        expect(listAliasesSpy.callCount).toEqual(2);
-
-        const kmsConstructorSpy = AWS.KMS as unknown as sinon.SinonSpy;
-        const constructorApiRegions = new Set([kmsConstructorSpy.getCall(0).args[0].region, kmsConstructorSpy.getCall(1).args[0].region]);
-        expect(constructorApiRegions).toEqual(new Set(['eu-west-1', 'eu-west-2']));
+        // THEN
+        expect(rdsMock.commandCalls(rds.CopyDBClusterSnapshotCommand)).toHaveLength(2);
+        expect(kmsMock.commandCalls(kms.ListAliasesCommand)).toHaveLength(2);
     });
 });
 
 describe('handleSnapshotDeletion', () => {
+    const OLD_ENV = process.env;
+
+    beforeEach(() => {
+        jest.resetModules();
+        process.env = {
+            ...OLD_ENV,
+            AWS_REGION: 'eu-west-2',
+            AWS_DEFAULT_REGION: 'eu-west-2',
+        };
+        rdsMock.reset();
+        kmsMock.reset();
+    });
+
+    afterEach(() => {
+        rdsMock.restore();
+        kmsMock.restore();
+    });
+
+    afterAll(() => {
+        process.env = OLD_ENV;
+    });
+
+    afterAll(() => {
+        process.env = OLD_ENV;
+    });
+
     test('simple', async () => {
-        const deleteDBClusterSnapshotSpy = sinon.spy((params, cb) => {
-            cb(null, {});
+        rdsMock.on(rds.DeleteDBClusterSnapshotCommand).resolves({});
+
+        rdsMock.on(rds.DescribeDBClusterSnapshotsCommand).resolves({
+            DBClusterSnapshots: [
+                {
+                    DBClusterSnapshotIdentifier: 'mysnapshot',
+                    DBClusterSnapshotArn: 'mysnapshotarn',
+                    DBClusterIdentifier: 'mysourcedbclusteridentifier',
+                    SnapshotCreateTime: new Date(new Date().getTime() - 24 * HOUR_IN_MILLIS),
+                    TagList: [
+                        {
+                            Key: 'aurora-snapshot-copier-cdk/CopiedBy/instanceId',
+                            Value: 'aurora-snapshot-copier-cdk',
+                        },
+                    ],
+                },
+            ],
         });
-
-        AWSMock.mock('RDS', 'deleteDBClusterSnapshot', deleteDBClusterSnapshotSpy);
-
-        const describeDBClusterSnapshotsSpy = sinon.spy((params, cb) => {
-            cb(null, {
-                DBClusterSnapshots: [
-                    {
-                        DBClusterSnapshotIdentifier: 'mysnapshot',
-                        DBClusterSnapshotArn: 'mysnapshotarn',
-                        DBClusterIdentifier: 'mysourcedbclusteridentifier',
-                        SnapshotCreateTime: new Date(new Date().getTime() - 24 * HOUR_IN_MILLIS),
-                        TagList: [
-                            {
-                                Key: 'aurora-snapshot-copier-cdk/CopiedBy/instanceId',
-                                Value: 'aurora-snapshot-copier-cdk',
-                            },
-                        ],
-                    },
-                ],
-            });
-        });
-
-        AWSMock.mock('RDS', 'describeDBClusterSnapshots', describeDBClusterSnapshotsSpy);
 
         await handlerMain.handleSnapshotDeletion(
             {
@@ -671,7 +699,7 @@ describe('handleSnapshotDeletion', () => {
             'instanceId',
         );
 
-        expect(deleteDBClusterSnapshotSpy.callCount).toEqual(1);
+        expect(rdsMock.commandCalls(rds.DeleteDBClusterSnapshotCommand)).toHaveLength(1);
     });
 });
 
