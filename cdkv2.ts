@@ -62,7 +62,7 @@ export class AuroraSnapshotCopier extends Construct {
 
         const handler = new lambda.Function(this, 'Handler', {
             code: lambda.Code.fromAsset(pathlib.join(__dirname, 'handler')),
-            runtime: lambda.Runtime.NODEJS_18_X,
+            runtime: new lambda.Runtime('nodejs22.x', lambda.RuntimeFamily.NODEJS, { supportsInlineCode: true }),
             handler: 'main.handler',
             timeout: props.handlerTimeout ?? cdk.Duration.minutes(1),
             environment: allToEnv(simplifiedProps),
