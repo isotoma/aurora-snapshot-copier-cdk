@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file. Dates are displayed in UTC.
 
+#### [2.3.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/2.2.0...2.3.0)
+
+- Upgrade Lambda runtime from 18 to 22 [`#23`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/23)
+
 #### [2.2.0](https://github.com/isotoma/aurora-snapshot-copier-cdk/compare/2.1.0...2.2.0)
+
+> 15 May 2024
 
 - Use Node 18 [`#22`](https://github.com/isotoma/aurora-snapshot-copier-cdk/pull/22)
 
